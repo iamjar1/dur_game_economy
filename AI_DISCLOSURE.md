@@ -15,12 +15,7 @@
 
 ## What I Did Myself
 
-1. **Requirements analysis** - Read and understood the brief
-2. **Technology choices** - Selected Python/FastAPI/SQLite based on familiarity and suitability
-3. **Architecture decisions** - Made trade-off choices (SQLite vs PostgreSQL, retention period, etc.)
-4. **Code review** - Reviewed all AI-generated code for correctness
-5. **Testing** - Ran tests to verify functionality
-6. **Git workflow** - Created repo, managed commits with meaningful messages
+Coding but assisted. Learned alot in regards to the failsafe checks and fallbacks to go during crashes. Learned Idempotency and Atomicity for safer crash responses. 
 
 ## AI Limitations
 

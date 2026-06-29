@@ -2,43 +2,36 @@ import sqlite3
 import json
 import hashlib
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Optional
 from .database import get_db
 
-def generate_idempotency_key(player_id: str, operation: str, request_data: dict) -> str:
-    data_string = f"{player_id}:{operation}:{json.dumps(request_data, sort_keys=True)}"
-    return hashlib.sha256(data_string.encode()).hexdigest()
-
-def check_idempotency(key: str) -> Optional[dict]:
-    with get_db() as conn:
-        cursor = conn.execute(
-            "SELECT response_data FROM idempotency_keys WHERE idempotency_key = ? AND expires_at > ?",
-            (key, datetime.utcnow().isoformat())
-        )
-        row = cursor.fetchone()
-        if row:
-            return json.loads(row["response_data"])
+def _check_idempotency(conn, key: str) -> Optional[dict]:
+    cursor = conn.execute(
+        "SELECT response_data FROM idempotency_keys WHERE idempotency_key = ? AND expires_at > ?",
+        (key, datetime.now().isoformat())
+    )
+    row = cursor.fetchone()
+    if row:
+        return json.loads(row["response_data"])
     return None
 
-def store_idempotency(key: str, player_id: str, operation: str, request_data: dict, response_data: dict):
-    with get_db() as conn:
-        expires_at = (datetime.utcnow() + timedelta(hours=48)).isoformat()
-        conn.execute(
-            "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, player_id, operation, request_data, response_data, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (key, player_id, operation, json.dumps(request_data), json.dumps(response_data), expires_at)
-        )
+def _store_idempotency(conn, key: str, player_id: str, operation: str, request_data: dict, response_data: dict):
+    expires_at = (datetime.now() + timedelta(hours=48)).isoformat()
+    conn.execute(
+        "INSERT OR REPLACE INTO idempotency_keys (idempotency_key, player_id, operation, request_data, response_data, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (key, player_id, operation, json.dumps(request_data), json.dumps(response_data), expires_at)
+    )
 
 def credit_wallet(player_id: str, amount: int, reason: str, idempotency_key: str) -> dict:
-    existing = check_idempotency(idempotency_key)
-    if existing:
-        return existing
-    
     with get_db() as conn:
+        existing = _check_idempotency(conn, idempotency_key)
+        if existing:
+            return existing
+        
         conn.execute(
             "INSERT OR IGNORE INTO wallets (player_id, balance) VALUES (?, 0)",
             (player_id,)
         )
-        
         conn.execute(
             "UPDATE wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE player_id = ?",
             (amount, player_id)
@@ -60,16 +53,16 @@ def credit_wallet(player_id: str, amount: int, reason: str, idempotency_key: str
             "transactionId": transaction_id
         }
         
-        store_idempotency(idempotency_key, player_id, "credit", {"amount": amount, "reason": reason}, response)
+        _store_idempotency(conn, idempotency_key, player_id, "credit", {"amount": amount, "reason": reason}, response)
         
         return response
 
 def purchase_item(player_id: str, item_id: str, price: int, idempotency_key: str) -> dict:
-    existing = check_idempotency(idempotency_key)
-    if existing:
-        return existing
-    
     with get_db() as conn:
+        existing = _check_idempotency(conn, idempotency_key)
+        if existing:
+            return existing
+        
         conn.execute(
             "INSERT OR IGNORE INTO wallets (player_id, balance) VALUES (?, 0)",
             (player_id,)
@@ -114,16 +107,16 @@ def purchase_item(player_id: str, item_id: str, price: int, idempotency_key: str
             "transactionId": transaction_id
         }
         
-        store_idempotency(idempotency_key, player_id, "purchase", {"itemId": item_id, "price": price}, response)
+        _store_idempotency(conn, idempotency_key, player_id, "purchase", {"itemId": item_id, "price": price}, response)
         
         return response
 
 def claim_reward(player_id: str, reward_id: str, idempotency_key: str) -> dict:
-    existing = check_idempotency(idempotency_key)
-    if existing:
-        return existing
-    
     with get_db() as conn:
+        existing = _check_idempotency(conn, idempotency_key)
+        if existing:
+            return existing
+        
         cursor = conn.execute(
             "SELECT 1 FROM claimed_rewards WHERE player_id = ? AND reward_id = ?",
             (player_id, reward_id)
@@ -144,10 +137,10 @@ def claim_reward(player_id: str, reward_id: str, idempotency_key: str) -> dict:
         response = {
             "success": True,
             "rewardId": reward_id,
-            "claimedAt": datetime.utcnow().isoformat() + "Z"
+            "claimedAt": datetime.now().isoformat()
         }
         
-        store_idempotency(idempotency_key, player_id, "claim", {"rewardId": reward_id}, response)
+        _store_idempotency(conn, idempotency_key, player_id, "claim", {"rewardId": reward_id}, response)
         
         return response
 

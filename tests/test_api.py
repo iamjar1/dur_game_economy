@@ -9,6 +9,8 @@ import tempfile
 def client():
     """Create test client with fresh database."""
     db_fd, db_path = tempfile.mkstemp()
+    os.close(db_fd)
+    old_db = os.environ.get("DATABASE_PATH")
     os.environ["DATABASE_PATH"] = db_path
     
     init_db()
@@ -16,15 +18,18 @@ def client():
     with TestClient(app) as client:
         yield client
     
-    os.close(db_fd)
     os.unlink(db_path)
+    if old_db:
+        os.environ["DATABASE_PATH"] = old_db
+    else:
+        del os.environ["DATABASE_PATH"]
 
 def test_credit_wallet(client):
     """Test crediting wallet."""
     response = client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 100, "reason": "Battle win"},
-        headers={"idempotency_key": "test_credit_1"}
+        headers={"idempotency-key": "test_credit_1"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -37,13 +42,13 @@ def test_purchase_item(client):
     client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 200, "reason": "Initial"},
-        headers={"idempotency_key": "test_init_1"}
+        headers={"idempotency-key": "test_init_1"}
     )
     
     response = client.post(
         "/v1/wallets/player1/purchase",
         json={"itemId": "sword", "price": 100},
-        headers={"idempotency_key": "test_purchase_1"}
+        headers={"idempotency-key": "test_purchase_1"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -56,7 +61,7 @@ def test_insufficient_funds(client):
     response = client.post(
         "/v1/wallets/player1/purchase",
         json={"itemId": "sword", "price": 100},
-        headers={"idempotency_key": "test_insufficient_1"}
+        headers={"idempotency-key": "test_insufficient_1"}
     )
     assert response.status_code == 400
     data = response.json()
@@ -67,7 +72,7 @@ def test_claim_reward(client):
     response = client.post(
         "/v1/rewards/daily_bonus/claim",
         json={"playerId": "player1"},
-        headers={"idempotency_key": "test_claim_1"}
+        headers={"idempotency-key": "test_claim_1"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -79,13 +84,13 @@ def test_claim_reward_twice(client):
     client.post(
         "/v1/rewards/daily_bonus/claim",
         json={"playerId": "player1"},
-        headers={"idempotency_key": "test_claim_twice_1"}
+        headers={"idempotency-key": "test_claim_twice_1"}
     )
     
     response = client.post(
         "/v1/rewards/daily_bonus/claim",
         json={"playerId": "player1"},
-        headers={"idempotency_key": "test_claim_twice_2"}
+        headers={"idempotency-key": "test_claim_twice_2"}
     )
     assert response.status_code == 400
     data = response.json()
@@ -96,13 +101,13 @@ def test_idempotency(client):
     response1 = client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 100, "reason": "Test"},
-        headers={"idempotency_key": "test_idempotent_1"}
+        headers={"idempotency-key": "test_idempotent_1"}
     )
     
     response2 = client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 100, "reason": "Test"},
-        headers={"idempotency_key": "test_idempotent_1"}
+        headers={"idempotency-key": "test_idempotent_1"}
     )
     
     assert response1.json() == response2.json()
@@ -114,7 +119,7 @@ def test_concurrent_purchases(client):
     client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 150, "reason": "Initial"},
-        headers={"idempotency_key": "test_concurrent_init"}
+        headers={"idempotency-key": "test_concurrent_init"}
     )
     
     import concurrent.futures
@@ -123,7 +128,7 @@ def test_concurrent_purchases(client):
         return client.post(
             "/v1/wallets/player1/purchase",
             json={"itemId": f"item_{i}", "price": 100},
-            headers={"idempotency_key": f"test_concurrent_{i}"}
+            headers={"idempotency-key": f"test_concurrent_{i}"}
         )
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -144,17 +149,17 @@ def test_get_wallet(client):
     client.post(
         "/v1/wallets/player1/credit",
         json={"amount": 100, "reason": "Test"},
-        headers={"idempotency_key": "test_get_init"}
+        headers={"idempotency-key": "test_get_init"}
     )
     client.post(
         "/v1/wallets/player1/purchase",
         json={"itemId": "sword", "price": 50},
-        headers={"idempotency_key": "test_get_purchase"}
+        headers={"idempotency-key": "test_get_purchase"}
     )
     client.post(
         "/v1/rewards/bonus/claim",
         json={"playerId": "player1"},
-        headers={"idempotency_key": "test_get_claim"}
+        headers={"idempotency-key": "test_get_claim"}
     )
     
     response = client.get("/v1/wallets/player1")
@@ -169,7 +174,7 @@ def test_negative_amount(client):
     response = client.post(
         "/v1/wallets/player1/credit",
         json={"amount": -100, "reason": "Invalid"},
-        headers={"idempotency_key": "test_negative_1"}
+        headers={"idempotency-key": "test_negative_1"}
     )
     assert response.status_code == 422
 
@@ -178,6 +183,6 @@ def test_zero_price(client):
     response = client.post(
         "/v1/wallets/player1/purchase",
         json={"itemId": "free_item", "price": 0},
-        headers={"idempotency_key": "test_zero_1"}
+        headers={"idempotency-key": "test_zero_1"}
     )
     assert response.status_code == 422

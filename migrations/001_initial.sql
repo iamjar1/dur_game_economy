@@ -1,4 +1,4 @@
-# Wallets: stores player balances
+-- Wallets: stores player balances
 CREATE TABLE IF NOT EXISTS wallets (
     player_id TEXT PRIMARY KEY,
     balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),

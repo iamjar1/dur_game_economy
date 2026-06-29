@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from datetime import datetime
 
 class CreditRequest(BaseModel):
     amount: int = Field(..., gt=0, description="Amount to credit (must be positive)")

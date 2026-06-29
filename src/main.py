@@ -10,19 +10,11 @@ from .database import init_db, cleanup_expired_keys
 
 app = FastAPI(title="Game Economy Service", version="1.0.0")
 
-@app.on_event("startup")
-def startup():
+def init_app():
     init_db()
     cleanup_expired_keys()
 
-@app.on_event("startup")
-def startup_periodic_cleanup():
-    import asyncio
-    async def cleanup_loop():
-        while True:
-            await asyncio.sleep(3600)
-            cleanup_expired_keys()
-    asyncio.create_task(cleanup_loop())
+init_app()
 
 @app.post(
     "/v1/wallets/{player_id}/credit",

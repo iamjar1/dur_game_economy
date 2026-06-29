@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  game-economy:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/data/game_economy.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

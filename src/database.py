@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 
 @contextmanager
@@ -29,5 +29,5 @@ def init_db():
 def cleanup_expired_keys():
     """Remove expired idempotency keys (older than 48 hours)."""
     with get_db() as conn:
-        cutoff = (datetime.utcnow() - timedelta(hours=48)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
         conn.execute("DELETE FROM idempotency_keys WHERE expires_at < ?", (cutoff,))
